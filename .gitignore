@@ -1,0 +1,19 @@
+# Local secrets and state
+.env
+.env.local
+data/
+*.log
+*.db
+*.sqlite
+
+# Locally built binaries (large)
+bin/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# macOS
+.DS_Store

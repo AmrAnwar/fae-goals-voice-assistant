@@ -1,0 +1,10 @@
+# Voice agent framework + Google Gemini Live plugin
+livekit-agents[google]~=1.8
+
+# Token server + static frontend
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+
+# Newer releases dropped prebuilt wheels for Intel macOS 12; 48.x has one.
+cryptography>=48,<49
