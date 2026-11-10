@@ -1,0 +1,13 @@
+# Namespace that owns the whole Temporal stack.
+#
+# The Helm release is installed with --create-namespace as a safety net, but
+# applying this file first makes the ownership explicit and lets us label the
+# namespace itself. Helm does not manage this object.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: temporal
+  labels:
+    app.kubernetes.io/name: temporal
+    app.kubernetes.io/part-of: temporal
+    app.kubernetes.io/managed-by: kubectl

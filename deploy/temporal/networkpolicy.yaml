@@ -1,0 +1,38 @@
+# Network boundary for the database.
+#
+# Kubernetes NetworkPolicy is additive: by selecting the Postgres pods with
+# policyTypes=[Ingress], we deny every ingress that is not explicitly allowed
+# below. Only pods from the Temporal Helm release (same namespace, label
+# app.kubernetes.io/instance=temporal) may reach port 5432. Nothing else in the
+# cluster can dial the database, including the app pods if they are ever moved
+# into this namespace without that label.
+#
+# Enforcement requires a CNI that implements NetworkPolicy. minikube v1.39 with
+# its kindnet CNI does enforce it (verified below); other CNIs may accept the
+# object without enforcing it, so re-check if you change drivers. See
+# deploy/temporal/README.md for the verification commands.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-postgres
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: temporal
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: temporal-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: temporal
+      ports:
+        - protocol: TCP
+          port: 5432

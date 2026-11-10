@@ -200,7 +200,9 @@ agent / server
   backend/server.py        LiveKit token endpoint, goals + check-ins API
   backend/goals.py         SQLite goal store (goals + scheduled check-ins)
   backend/temporal/        Temporal worker, workflow, activity, schedule CLI
-deploy/temporal/           PostgreSQL manifest + Temporal Helm values
+deploy/temporal/           Namespace, PostgreSQL, NetworkPolicy, Helm values
+  README.md                Ownership, pinned versions, secrets, validation
+.github/workflows/ci.yml   Unit tests + Helm lint/template + kubeconform
 web/
   index.html               Voice UI
   styles.css               Magical aurora / orb / glass design
@@ -282,9 +284,15 @@ Bring the whole stack up with:
 make temporal-up
 ```
 
-This starts Colima if the Docker daemon is down, starts minikube, applies
-`deploy/temporal/postgres.yaml` (the chart no longer bundles a database),
-installs `temporal/temporal` with `deploy/temporal/values.yaml`, and forwards:
+This starts Colima if the Docker daemon is down, starts minikube, then:
+
+1. applies `deploy/temporal/namespace.yaml`;
+2. creates the `temporal-postgres` Secret on first run with a random password
+   (it is never written to Git);
+3. applies a NetworkPolicy that only allows Temporal chart pods to reach port `5432`;
+4. applies the PostgreSQL Service and StatefulSet and waits for them to roll out;
+5. installs the pinned `temporal/temporal` chart with `deploy/temporal/values.yaml`;
+6. port-forwards the frontend and Web UI.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -294,6 +302,20 @@ installs `temporal/temporal` with `deploy/temporal/values.yaml`, and forwards:
 The first install takes a few minutes while images are pulled. The chart's
 schema job creates the `temporal` / `temporal_visibility` databases
 automatically.
+
+**Versions are pinned:** Helm chart `1.8.0` (`TEMPORAL_CHART_VERSION` in
+`scripts/temporal-up.sh`) and `postgres:16.15-alpine`. Bump them deliberately,
+not implicitly.
+
+**Ownership is explicit:** the namespace, Secret, PostgreSQL StatefulSet, and
+NetworkPolicy are owned by this repo; the Temporal Deployments, Services, Jobs,
+and Web UI are rendered by Helm. Only Temporal runs in Kubernetes — FastAPI, the
+worker, LiveKit, and the voice agent stay on the host. See
+[`deploy/temporal/README.md`](deploy/temporal/README.md) for the full ownership
+table, secret rotation, and the NetworkPolicy CNI caveat.
+
+CI (`.github/workflows/ci.yml`) runs the unit tests, `helm lint`,
+`helm template`, and `kubeconform` on every push.
 
 > `helm.temporal.io` does not resolve on every network, so the setup script
 > uses the GitHub Pages mirror `https://temporalio.github.io/helm-charts`.

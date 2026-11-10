@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TEMPORAL_CHART_VERSION: "1.8.0"
+  KUBECONFORM_VERSION: "0.6.7"
+  KUBERNETES_VERSION: "1.31.0"
+
+jobs:
+  tests:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The unit tests only exercise the goal store and the check-in activity,
+      # so the full LiveKit/Gemini stack is not needed here.
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip temporalio~=1.9 python-dotenv~=1.0
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+  manifests:
+    name: Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the pinned chart version matches the setup script
+        run: |
+          grep -q "TEMPORAL_CHART_VERSION:-${TEMPORAL_CHART_VERSION}" scripts/temporal-up.sh
+
+      - name: Ensure no Secret manifests are committed
+        run: |
+          if grep -q '^kind: Secret' deploy/temporal/*.yaml; then
+            echo "Secrets must be created by scripts/temporal-up.sh, not committed." >&2
+            exit 1
+          fi
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: Add the Temporal chart repository
+        run: |
+          helm repo add temporal https://temporalio.github.io/helm-charts
+          helm repo update temporal
+
+      - name: Pull the pinned chart
+        run: |
+          helm pull temporal/temporal \
+            --version "$TEMPORAL_CHART_VERSION" \
+            --untar --untardir /tmp/charts
+
+      - name: Lint the Temporal chart with our values
+        run: |
+          helm lint /tmp/charts/temporal \
+            --values deploy/temporal/values.yaml
+
+      - name: Render the Temporal chart
+        run: |
+          mkdir -p rendered
+          helm template temporal /tmp/charts/temporal \
+            --namespace temporal \
+            --values deploy/temporal/values.yaml \
+            --include-crds > rendered/temporal.yaml
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSLo kubeconform.tar.gz \
+            "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+
+      - name: Validate the repository-owned manifests
+        run: |
+          kubeconform -strict -summary \
+            -kubernetes-version "$KUBERNETES_VERSION" \
+            deploy/temporal/namespace.yaml \
+            deploy/temporal/postgres.yaml \
+            deploy/temporal/networkpolicy.yaml
+
+      - name: Validate the rendered Temporal manifests
+        run: |
+          kubeconform -strict -summary -ignore-missing-schemas \
+            -kubernetes-version "$KUBERNETES_VERSION" \
+            rendered/temporal.yaml
+
+      - name: Check shell scripts parse
+        run: |
+          bash -n scripts/temporal-up.sh
+          bash -n scripts/temporal-down.sh

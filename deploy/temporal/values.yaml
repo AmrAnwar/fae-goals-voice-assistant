@@ -1,12 +1,15 @@
-# Values for the official Temporal Helm chart (temporal/temporal).
+# Values for the official Temporal Helm chart (temporal/temporal), pinned to
+# chart 1.8.0 (Temporal server 1.32.2) by scripts/temporal-up.sh.
 #
 # Install with:
 #   helm upgrade --install temporal temporal/temporal \
-#     --namespace temporal --values deploy/temporal/values.yaml
+#     --version 1.8.0 --namespace temporal --create-namespace \
+#     --values deploy/temporal/values.yaml
 #
 # This is a single-node local-dev topology backed by the PostgreSQL instance in
 # postgres.yaml. The chart's schema job creates both databases and applies the
-# Temporal schemas on first install.
+# Temporal schemas on first install. The database password comes from the
+# `temporal-postgres` Secret created by the setup script, never from this file.
 
 server:
   replicaCount: 1

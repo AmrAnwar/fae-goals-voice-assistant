@@ -4,21 +4,11 @@
 # StatefulSet provides one for the local minikube cluster. The `temporal` user
 # is a superuser, which lets the chart's schema job create the `temporal` and
 # `temporal_visibility` databases on first install.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: temporal
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: temporal-postgres
-  namespace: temporal
-type: Opaque
-stringData:
-  # Local-dev only. Change this if you reuse the cluster for anything real.
-  password: temporal
----
+#
+# The password is deliberately absent from this file. scripts/temporal-up.sh
+# creates the `temporal-postgres` Secret once and reuses it on every run. To
+# rotate the password you must also recreate the data volume, because the
+# password is stored inside PostgreSQL on first initialisation.
 apiVersion: v1
 kind: Service
 metadata:
@@ -26,6 +16,10 @@ metadata:
   namespace: temporal
   labels:
     app.kubernetes.io/name: temporal-postgres
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: temporal
+    app.kubernetes.io/managed-by: kubectl
 spec:
   type: ClusterIP
   selector:
@@ -40,23 +34,44 @@ kind: StatefulSet
 metadata:
   name: temporal-postgres
   namespace: temporal
-  labels:
+  labels: &labels
     app.kubernetes.io/name: temporal-postgres
+    app.kubernetes.io/instance: temporal
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: temporal
+    app.kubernetes.io/managed-by: kubectl
 spec:
   serviceName: temporal-postgres
   replicas: 1
+  revisionHistoryLimit: 3
   selector:
+    # Immutable. Keep this selector stable and add new labels to the pod
+    # template; changing it would require deleting and recreating the
+    # StatefulSet.
     matchLabels:
       app.kubernetes.io/name: temporal-postgres
   template:
     metadata:
-      labels:
-        app.kubernetes.io/name: temporal-postgres
+      labels: *labels
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        # The alpine postgres image ships the postgres user as uid/gid 70.
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: postgres:16.15-alpine
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: postgres
               containerPort: 5432
@@ -72,16 +87,27 @@ spec:
                   key: password
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+          # Give initdb room on a slow first start, then switch to the normal
+          # readiness/liveness pair. Startup probes disable both until they
+          # pass, so a long first boot is not mistaken for a crash loop.
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", "temporal", "-d", "postgres"]
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 60
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "temporal", "-d", "postgres"]
-            initialDelaySeconds: 5
-            periodSeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", "temporal", "-d", "postgres"]
-            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
               cpu: 100m

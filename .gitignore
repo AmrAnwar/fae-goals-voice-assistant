@@ -9,6 +9,9 @@ data/
 # Locally built binaries (large)
 bin/
 
+# Helm output rendered for validation
+rendered/
+
 # Python
 .venv/
 __pycache__/
