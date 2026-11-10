@@ -8,3 +8,6 @@ python-dotenv>=1.0
 
 # Newer releases dropped prebuilt wheels for Intel macOS 12; 48.x has one.
 cryptography>=48,<49
+
+# Durable scheduled jobs (daily goal check-ins)
+temporalio>=1.9,<2

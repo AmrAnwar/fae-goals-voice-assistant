@@ -21,6 +21,9 @@
     goalsList: $("goals-list"),
     goalsEmpty: $("goals-empty"),
     goalCount: $("goal-count"),
+    checkinsList: $("check-ins-list"),
+    checkinsEmpty: $("check-ins-empty"),
+    checkinRun: $("check-in-run"),
     toast: $("toast"),
   };
 
@@ -38,6 +41,7 @@
     agentTimer: 0,
     toastTimer: 0,
     lastGoals: [],
+    lastCheckIns: [],
   };
 
   /* ------------------------------------------------------------- identity */
@@ -549,6 +553,90 @@
     }
   }
 
+  /* ----------------------------------------------------------- check-ins */
+  async function fetchCheckIns() {
+    try {
+      const res = await fetch(
+        `/api/check-ins?identity=${encodeURIComponent(state.identity)}&limit=10`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      renderCheckIns(data.check_ins || []);
+    } catch {
+      /* Temporal or the server may be restarting */
+    }
+  }
+
+  function renderCheckIns(checkIns) {
+    state.lastCheckIns = checkIns;
+    els.checkinsList.innerHTML = "";
+
+    const hasCheckIns = checkIns.length > 0;
+    els.checkinsEmpty.hidden = hasCheckIns;
+    els.checkinsList.hidden = !hasCheckIns;
+    if (!hasCheckIns) return;
+
+    const fragment = document.createDocumentFragment();
+    for (const checkIn of checkIns) {
+      const li = document.createElement("li");
+      li.className = "check-in";
+      li.dataset.id = String(checkIn.id);
+
+      const message = document.createElement("span");
+      message.textContent = checkIn.message;
+      li.appendChild(message);
+
+      const when = document.createElement("time");
+      when.dateTime = checkIn.created_at;
+      when.textContent = formatWhen(checkIn.created_at);
+      li.appendChild(when);
+
+      fragment.appendChild(li);
+    }
+    els.checkinsList.appendChild(fragment);
+  }
+
+  function formatWhen(iso) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return iso;
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  async function runCheckIn() {
+    const before = state.lastCheckIns[0]?.id ?? 0;
+    const label = els.checkinRun.textContent;
+    els.checkinRun.disabled = true;
+    els.checkinRun.textContent = "Calling Fae…";
+
+    try {
+      const res = await fetch(
+        `/api/check-ins/run?identity=${encodeURIComponent(state.identity)}`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not start a check-in.");
+      toast("Fae is writing you a note…");
+
+      // The workflow runs asynchronously in the Temporal worker, so poll for
+      // the new note instead of blocking the request.
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        await fetchCheckIns();
+        if ((state.lastCheckIns[0]?.id ?? 0) > before) break;
+      }
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      els.checkinRun.disabled = false;
+      els.checkinRun.textContent = label;
+    }
+  }
+
   function onData(payload, participant, kind, topic) {
     try {
       const text = new TextDecoder().decode(payload);
@@ -597,6 +685,8 @@
     if (button.dataset.action === "complete") completeGoal(goalEl.dataset.id);
     if (button.dataset.action === "delete") deleteGoal(goalEl.dataset.id);
   });
+
+  els.checkinRun.addEventListener("click", runCheckIn);
 
   /* ---------------------------------------------------------------- stars */
   function initStars() {
@@ -654,6 +744,7 @@
     initStars();
     setControls(false);
     fetchGoals();
+    fetchCheckIns();
 
     fetch("/api/health")
       .then((res) => (res.ok ? res.json() : null))

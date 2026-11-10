@@ -727,8 +727,10 @@ body[data-state="speaking"] .status { color: #ede4ff; border-color: var(--line-s
 
 .goals-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 11px;
+  min-height: 0;
   padding: 16px 2px 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -873,6 +875,116 @@ body[data-state="speaking"] .status { color: #ede4ff; border-color: var(--line-s
 }
 
 .goal-tag svg { width: 11px; height: 11px; flex: none; }
+
+/* ------------------------------------------------------------ check-ins */
+.check-ins {
+  flex: none;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.check-ins-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.check-ins-header h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: #f3e8ff;
+}
+
+.check-ins-header p {
+  margin-top: 2px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.check-in-run {
+  flex: none;
+  padding: 5px 11px;
+  border: 1px solid rgba(196, 181, 253, 0.28);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.14);
+  color: #e9d5ff;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 150ms ease;
+}
+
+.check-in-run:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.26);
+  border-color: rgba(196, 181, 253, 0.5);
+  transform: translateY(-1px);
+}
+
+.check-in-run:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.check-ins-empty {
+  margin-top: 10px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.check-ins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 168px;
+  margin-top: 10px;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167, 139, 250, 0.35) transparent;
+}
+
+.check-ins-list::-webkit-scrollbar { width: 5px; }
+.check-ins-list::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.3); border-radius: 99px; }
+
+.check-in {
+  position: relative;
+  padding: 9px 11px 9px 26px;
+  border: 1px solid rgba(252, 211, 77, 0.16);
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(252, 211, 77, 0.07), rgba(252, 211, 77, 0.02));
+  color: #f5ecff;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+  animation: goal-in 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.check-in::before {
+  content: "✦";
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  color: var(--gold);
+  font-size: 11px;
+  text-shadow: 0 0 12px rgba(252, 211, 77, 0.6);
+}
+
+.check-in time {
+  display: block;
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
 
 .goals-footer {
   display: flex;

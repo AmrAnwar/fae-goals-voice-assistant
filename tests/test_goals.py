@@ -59,6 +59,33 @@ class GoalStoreTest(unittest.TestCase):
         self.assertFalse(self.store.remove("bob", goal["id"]))
         self.assertEqual(len(self.store.list("alice")), 1)
 
+    def test_active_goals_and_identities(self) -> None:
+        self.store.add("alice", "Learn guitar")
+        self.store.add("alice", "Run a 10k")
+        self.store.add("bob", "Write daily")
+        self.store.complete_by_title("alice", "guitar")
+
+        self.assertEqual(
+            [goal["title"] for goal in self.store.active_goals("alice")],
+            ["Run a 10k"],
+        )
+        self.assertEqual(self.store.identities(), ["alice", "bob"])
+
+    def test_check_ins_are_stored_separately_from_goals(self) -> None:
+        self.store.add("alice", "Run a 10k")
+        first = self.store.add_check_in("alice", "Gentle check-in on 'Run a 10k'.")
+        second = self.store.add_check_in("alice", "Another nudge.")
+        self.store.add_check_in("bob", "Bob's nudge.")
+
+        alice = self.store.list_check_ins("alice")
+        self.assertEqual([row["id"] for row in alice], [second["id"], first["id"]])
+        self.assertEqual(
+            [row["message"] for row in self.store.list_check_ins("bob")],
+            ["Bob's nudge."],
+        )
+        # Check-ins live in their own table and never affect the goal list.
+        self.assertEqual(len(self.store.list("alice")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

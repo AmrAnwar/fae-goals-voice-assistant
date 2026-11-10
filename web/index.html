@@ -122,6 +122,20 @@
 
       <ul id="goals-list" class="goals-list" aria-live="polite"></ul>
 
+      <section class="check-ins" aria-labelledby="check-ins-title">
+        <header class="check-ins-header">
+          <div>
+            <h2 id="check-ins-title">Fae’s notes</h2>
+            <p>Written by a scheduled Temporal workflow.</p>
+          </div>
+          <button id="check-in-run" class="check-in-run" type="button">Run now</button>
+        </header>
+        <p id="check-ins-empty" class="check-ins-empty">
+          No notes yet. Your next check-in arrives on schedule.
+        </p>
+        <ul id="check-ins-list" class="check-ins-list" aria-live="polite" hidden></ul>
+      </section>
+
       <footer class="goals-footer">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.6-7 10-7 10z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
         Stored locally on this machine. One room, one dreamer.

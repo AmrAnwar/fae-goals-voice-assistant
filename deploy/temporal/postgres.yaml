@@ -1,0 +1,102 @@
+# PostgreSQL for Temporal.
+#
+# The Temporal Helm chart (v1.8+) no longer bundles a database, so this
+# StatefulSet provides one for the local minikube cluster. The `temporal` user
+# is a superuser, which lets the chart's schema job create the `temporal` and
+# `temporal_visibility` databases on first install.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: temporal
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+type: Opaque
+stringData:
+  # Local-dev only. Change this if you reuse the cluster for anything real.
+  password: temporal
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-postgres
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: temporal-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: temporal-postgres
+  namespace: temporal
+  labels:
+    app.kubernetes.io/name: temporal-postgres
+spec:
+  serviceName: temporal-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temporal-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: temporal
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-postgres
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "temporal", "-d", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "temporal", "-d", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

@@ -100,6 +100,39 @@ async def list_goals(identity: str = Query(..., max_length=64)) -> dict:
     return {"goals": STORE.list(identity)}
 
 
+@app.get("/api/check-ins")
+async def list_check_ins(
+    identity: str = Query(..., max_length=64),
+    limit: int = Query(20, ge=1, le=100),
+) -> dict:
+    """Scheduled notes from Fae, newest first."""
+    identity = _safe_identity(identity)
+    return {"check_ins": STORE.list_check_ins(identity, limit)}
+
+
+@app.post("/api/check-ins/run")
+async def run_check_in(identity: str = Query("", max_length=64)) -> dict:
+    """Trigger the Temporal check-in workflow now.
+
+    Passing an identity limits the run to that dreamer; omitting it checks
+    every dreamer, just like the daily schedule does.
+    """
+    target = _safe_identity(identity) if identity else None
+    try:
+        from backend.temporal.client import start_check_in
+
+        workflow_id = await start_check_in(target)
+    except Exception as exc:  # Temporal down / worker not ready
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Temporal is not reachable. Start it with `make temporal-up` "
+                "and the worker with `make temporal-worker`."
+            ),
+        ) from exc
+    return {"ok": True, "workflow_id": workflow_id}
+
+
 @app.post("/api/goals/{goal_id}/complete")
 async def complete_goal(goal_id: str, identity: str = Query(..., max_length=64)) -> dict:
     identity = _safe_identity(identity)

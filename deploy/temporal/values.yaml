@@ -1,0 +1,89 @@
+# Values for the official Temporal Helm chart (temporal/temporal).
+#
+# Install with:
+#   helm upgrade --install temporal temporal/temporal \
+#     --namespace temporal --values deploy/temporal/values.yaml
+#
+# This is a single-node local-dev topology backed by the PostgreSQL instance in
+# postgres.yaml. The chart's schema job creates both databases and applies the
+# Temporal schemas on first install.
+
+server:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  config:
+    persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      # Lower than the 512 production default to keep a small VM comfortable.
+      # This value is immutable for the lifetime of the cluster's data.
+      numHistoryShards: 4
+      datastores:
+        default:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal
+            connectAddr: temporal-postgres.temporal.svc.cluster.local:5432
+            connectProtocol: tcp
+            user: temporal
+            existingSecret: temporal-postgres
+            secretKey: password
+            maxConns: 10
+            maxIdleConns: 10
+        visibility:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal_visibility
+            connectAddr: temporal-postgres.temporal.svc.cluster.local:5432
+            connectProtocol: tcp
+            user: temporal
+            existingSecret: temporal-postgres
+            secretKey: password
+            maxConns: 10
+            maxIdleConns: 10
+    # Create the `default` namespace used by the app's worker and client.
+    namespaces:
+      create: true
+      useHelmHooks: true
+      namespace:
+        - name: default
+          retention: 3d
+
+  frontend:
+    service:
+      type: ClusterIP
+      port: 7233
+  # Single-node dev: one pod per service is plenty.
+  history:
+    replicaCount: 1
+  matching:
+    replicaCount: 1
+  worker:
+    replicaCount: 1
+
+admintools:
+  enabled: true
+
+web:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 8080
+
+# The chart creates the schema with a Helm pre-install hook. If an install is
+# interrupted, delete the leftover job before retrying:
+#   kubectl delete job -n temporal -l app.kubernetes.io/component=database
+schema:
+  backoffLimit: 20

@@ -90,23 +90,36 @@ unless they ask.
 def _instructions_for(identity: str) -> str:
     goals = STORE.list(identity)
     if not goals:
-        return INSTRUCTIONS + "\n\nThis dreamer has no saved goals yet."
+        instructions = INSTRUCTIONS + "\n\nThis dreamer has no saved goals yet."
+    else:
+        lines = []
+        for goal in goals[:12]:
+            bits = [f"- {goal['title']} [{goal['status']}]"]
+            if goal["deadline"]:
+                bits.append(f"deadline: {goal['deadline']}")
+            if goal["first_step"]:
+                bits.append(f"first step: {goal['first_step']}")
+            lines.append("; ".join(bits))
+        saved = "\n".join(lines)
+        instructions = (
+            INSTRUCTIONS
+            + "\n\nSaved goals for this dreamer:\n"
+            + saved
+            + "\nUse this context naturally. Do not read the list aloud unless asked."
+        )
 
-    lines = []
-    for goal in goals[:12]:
-        bits = [f"- {goal['title']} [{goal['status']}]"]
-        if goal["deadline"]:
-            bits.append(f"deadline: {goal['deadline']}")
-        if goal["first_step"]:
-            bits.append(f"first step: {goal['first_step']}")
-        lines.append("; ".join(bits))
-    saved = "\n".join(lines)
-    return (
-        INSTRUCTIONS
-        + "\n\nSaved goals for this dreamer:\n"
-        + saved
-        + "\nUse this context naturally. Do not read the list aloud unless asked."
-    )
+    # Scheduled check-ins are produced by the Temporal workflow. Surface the
+    # newest one so Fae can follow up naturally in the next voice session.
+    check_ins = STORE.list_check_ins(identity, limit=1)
+    if check_ins:
+        latest = check_ins[0]
+        instructions += (
+            "\n\nA scheduled check-in was written for this dreamer at "
+            f"{latest['created_at']}: \"{latest['message']}\" "
+            "Use it as context and, if it fits, gently follow up. Do not read "
+            "it verbatim or mention schedules, workflows, or databases."
+        )
+    return instructions
 
 
 class Fairy(Agent):

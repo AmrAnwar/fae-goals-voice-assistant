@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS goals (
     completed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_goals_identity ON goals(identity);
+
+CREATE TABLE IF NOT EXISTS check_ins (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    identity   TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_check_ins_identity
+    ON check_ins(identity, created_at DESC);
 """
 
 
@@ -87,6 +96,51 @@ class GoalStore:
                 (identity, goal_id),
             ).fetchone()
         return _row_to_dict(row) if row else None
+
+    def identities(self) -> list[str]:
+        """Every dreamer who has saved at least one goal."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT identity FROM goals ORDER BY identity"
+            ).fetchall()
+        return [str(row["identity"]) for row in rows]
+
+    def active_goals(self, identity: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM goals
+                WHERE identity = ? AND status = 'active'
+                ORDER BY created_at ASC
+                """,
+                (identity,),
+            ).fetchall()
+        return [_row_to_dict(row) for row in rows]
+
+    # ------------------------------------------------------------- reminders
+
+    def add_check_in(self, identity: str, message: str) -> dict[str, Any]:
+        created_at = _now()
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO check_ins (identity, message, created_at) VALUES (?, ?, ?)",
+                (identity, message, created_at),
+            )
+            check_in_id = cur.lastrowid
+        return {"id": check_in_id, "identity": identity, "message": message, "created_at": created_at}
+
+    def list_check_ins(self, identity: str, limit: int = 20) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM check_ins
+                WHERE identity = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (identity, max(1, min(limit, 100))),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     # ----------------------------------------------------------------- write
 
